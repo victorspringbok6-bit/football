@@ -102,25 +102,39 @@ const container = document.getElementById('targetsContainer');
 container.innerHTML = "<div class='text-gray-400 text-sm animate-pulse p-2 text-center sm:text-left'>Loading massive multi-league daily schedule...</div>";
 document.getElementById('emptyState').classList.add('hidden');
 document.getElementById('actionBar').classList.add('hidden');
+async function fetchGlobalSlate() {
+if (!apiKey) {
+alert("Please enter and save your API key first.");
+return;
+}
+const container = document.getElementById('targetsContainer');
+container.innerHTML = "<div class='text-gray-400 text-sm animate-pulse p-2 text-center sm:text-left'>Loading massive multi-league daily schedule...</div>";
+document.getElementById('emptyState').classList.add('hidden');
+document.getElementById('actionBar').classList.add('hidden');
 allFixtures = [];
 scanResults = {};
 
-const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-const todayStr = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
+// Get the user's explicit named timezone string (e.g., "Europe/London")
+const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+// Calculate local YYYY-MM-DD accurately based on the current system clock
+const now = new Date();
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, '0');
+const day = String(now.getDate()).padStart(2, '0');
+const todayStr = `${year}-${month}-${day}`;
 
 try {
-// Using the full date card to fetch hundreds of scheduled games instead of restricting only to currently running minutes
-const response = await fetch(`https://v3.football.api-sports.io/fixtures?date=${todayStr}`, {
+// Pass both the correct local date and the explicit timezone parameter to the API
+const response = await fetch(`https://v3.football.api-sports.io/fixtures?date=${todayStr}&timezone=${encodeURIComponent(userTimezone)}`, {
 "method": "GET",
-const todayStr = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
+"headers": { "x-apisports-key": apiKey }
 });
 updateQuotaHeaders(response.headers);
 const data = await response.json();
 
-const response = await fetch(`https://v3.football.api-sports.io/fixtures?date=${todayStr}`, {
-// Collects unstarted, live and halftime fixtures unconditionally
+if (data.response && data.response.length > 0) {
 allFixtures = data.response.filter(f => validStatuses.includes(f.fixture.status.short));
-// Sort by date/time sequence
 allFixtures.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date));
 }
 
@@ -141,8 +155,9 @@ container.innerHTML = "<div class='text-red-500 text-sm text-center p-4'>Network
 }
 
 async function makeSearchCall(searchString, todayStr) {
+const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 try {
-const response = await fetch(`https://v3.football.api-sports.io/fixtures?date=${todayStr}&search=${encodeURIComponent(searchString)}`, {
+const response = await fetch(`https://v3.football.api-sports.io/fixtures?date=${todayStr}&search=${encodeURIComponent(searchString)}&timezone=${encodeURIComponent(userTimezone)}`, {
     "method": "GET",
     "headers": { "x-apisports-key": apiKey }
 });
@@ -153,7 +168,7 @@ if (resData.response && resData.response.length > 0) {
         const isDuplicate = allFixtures.some(f => f.fixture.id === matchedFixture.fixture.id);
         if (!isDuplicate && validStatuses.includes(matchedFixture.fixture.status.short)) {
             allFixtures.push(matchedFixture);
-            const todayStr = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
+            unscannedFixtureIds.push(matchedFixture.fixture.id);
             addedAny = true;
         }
     });
@@ -173,8 +188,11 @@ return;
 const txt = document.getElementById('manualInput').value.trim();
 if (!txt) return;
 
-const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-const todayStr = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
+const now = new Date();
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, '0');
+const day = String(now.getDate()).padStart(2, '0');
+const todayStr = `${year}-${month}-${day}`;
 
 const lines = txt.split(/\n|,/).map(s => s.trim()).filter(s => s.length > 2);
 if (lines.length === 0) return;
@@ -196,6 +214,25 @@ for (let term of searchTerms) {
         f.teams.home.name.toLowerCase().includes(lowerQuery) || 
         f.teams.away.name.toLowerCase().includes(lowerQuery)
     );
+    if (alreadyExists) continue; 
+
+    let success = await makeSearchCall(cleanQuery, todayStr);
+
+    if (!success) {
+        let words = cleanQuery.split(' ').filter(w => w.length > 3);
+        for (let word of words) {
+            let fallbackHit = await makeSearchCall(word, todayStr);
+            if (fallbackHit) break; 
+        }
+    }
+}
+}
+
+document.getElementById('manualInput').value = "";
+renderAllFixtures();
+updateBatchButtonText();
+updateFilterCounters();
+}
     if (alreadyExists) continue; 
 
     let success = await makeSearchCall(cleanQuery, todayStr);
