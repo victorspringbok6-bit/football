@@ -19,7 +19,7 @@ input, textarea { font-size: 16px !important; }
 <div class="flex-1 flex flex-col justify-between">
 <div>
 <h1 class="text-lg sm:text-xl font-bold text-white">Style of Play Analyzer Pro</h1>
-<p class="text-[11px] sm:text-xs text-gray-400 mt-0.5">Global Live Engine — 24/7 Global Feed with Half-by-Half Goal Aggregates</p>
+<p class="text-[11px] sm:text-xs text-gray-400 mt-0.5">Global 24/7 Slate — Combined Live, Halftime & Upcoming Matches</p>
 </div>
 <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-4">
 <div id="quotaDisplay" class="text-xs bg-gray-900 border border-gray-800 rounded px-3 py-2 text-gray-400 hidden text-center sm:text-left h-full flex items-center justify-center sm:justify-start min-h-[38px]">
@@ -29,7 +29,7 @@ Remaining: &nbsp;<span id="apiRemaining" class="text-green-500 font-bold">-</spa
 <input type="password" id="apiKeyInput" placeholder="Enter API Key" class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-green-500 flex-1 sm:w-44 min-h-[38px]">
 <button onclick="saveApiKey()" class="bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-2 rounded transition font-semibold whitespace-nowrap min-h-[38px]">Save Key</button>
 </div>
-<button onclick="fetchLiveFixtures()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded transition font-semibold text-center whitespace-nowrap w-full sm:w-auto min-h-[38px]">Load Global Live Feed</button>
+<button onclick="fetchGlobalSlate()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded transition font-semibold text-center whitespace-nowrap w-full sm:w-auto min-h-[38px]">Load Global 24/7 Slate</button>
 </div>
 </div>
 
@@ -63,10 +63,10 @@ Remaining: &nbsp;<span id="apiRemaining" class="text-green-500 font-bold">-</spa
 
 <div id="dashboardContainer" class="space-y-6">
 <div>
-<h2 class="text-xs font-bold tracking-wider text-blue-500 uppercase flex items-center gap-1.5 mb-3 px-0.5">🌍 GLOBAL Real-Time matches (<span id="targetCount">0</span>)</h2>
+<h2 class="text-xs font-bold tracking-wider text-blue-500 uppercase flex items-center gap-1.5 mb-3 px-0.5">🌍 GLOBAL 24/7 SCHEDULE (<span id="targetCount">0</span>)</h2>
 <div id="targetsContainer" class="space-y-3"></div>
 </div>
-<div id="emptyState" class="text-center py-12 text-sm text-gray-500 px-4">Enter your API key and click "Load Global Live Feed" or add custom matches manually to get started.</div>
+<div id="emptyState" class="text-center py-12 text-sm text-gray-500 px-4">Enter your API key and click "Load Global 24/7 Slate" or add custom matches manually to get started.</div>
 </div>
 
 <script>
@@ -93,21 +93,24 @@ document.getElementById('quotaDisplay').classList.remove('hidden');
 }
 }
 
-async function fetchLiveFixtures() {
+async function fetchGlobalSlate() {
 if (!apiKey) {
 alert("Please enter and save your API key first.");
 return;
 }
 const container = document.getElementById('targetsContainer');
-container.innerHTML = "<div class='text-gray-400 text-sm animate-pulse p-2 text-center sm:text-left'>Bypassing geographical blocks. Extracting entire live global feed...</div>";
+container.innerHTML = "<div class='text-gray-400 text-sm animate-pulse p-2 text-center sm:text-left'>Loading massive multi-league daily schedule...</div>";
 document.getElementById('emptyState').classList.add('hidden');
 document.getElementById('actionBar').classList.add('hidden');
 allFixtures = [];
 scanResults = {};
 
+const tzoffset = (new Date()).getTimezoneOffset() * 60000;
+const todayStr = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
+
 try {
-// Changed endpoint to live=all to retrieve the massive un-filtered global match array across all leagues
-const response = await fetch(`https://v3.football.api-sports.io/fixtures?live=all`, {
+// Using the full date card to fetch hundreds of scheduled games instead of restricting only to currently running minutes
+const response = await fetch(`https://v3.football.api-sports.io/fixtures?date=${todayStr}`, {
 "method": "GET",
 "headers": { "x-apisports-key": apiKey }
 });
@@ -115,7 +118,10 @@ updateQuotaHeaders(response.headers);
 const data = await response.json();
 
 if (data.response && data.response.length > 0) {
+// Collects unstarted, live and halftime fixtures unconditionally
 allFixtures = data.response.filter(f => validStatuses.includes(f.fixture.status.short));
+// Sort by date/time sequence
+allFixtures.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date));
 }
 
 unscannedFixtureIds = allFixtures.map(f => f.fixture.id);
@@ -127,7 +133,7 @@ updateBatchButtonText();
 updateFilterCounters();
 filterDashboard('all'); 
 } else {
-container.innerHTML = "<div class='text-gray-400 text-sm text-center p-4'>No matching live or upcoming global games currently open.</div>";
+container.innerHTML = "<div class='text-gray-400 text-sm text-center p-4'>No matching games found for today's card framework.</div>";
 }
 } catch (err) {
 container.innerHTML = "<div class='text-red-500 text-sm text-center p-4'>Network error. Check connection or token configuration.</div>";
@@ -412,7 +418,6 @@ let over25Count = 0, bttsCount = 0, fhGoalsCount = 0, shGoalsCount = 0;
 let matchDetailsList = [];
 
 fixtures.forEach(f => {
-// Parse first/second half breakdowns safely
 const hFH = f.score?.halftime?.home !== null ? f.score.halftime.home : 0;
 const aFH = f.score?.halftime?.away !== null ? f.score.halftime.away : 0;
 const homeTotal = f.goals.home !== null ? f.goals.home : 0;
