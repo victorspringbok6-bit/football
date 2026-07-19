@@ -10,7 +10,6 @@ body { background-color: #0b0f17; color: #f3f4f6; font-family: ui-sans-serif, sy
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: #0b0f17; }
 ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
-/* Input styling overrides to prevent iOS default zooming */
 input, textarea { font-size: 16px !important; }
 @media (min-width: 768px) { input, textarea { font-size: 0.75rem !important; } }
 </style>
@@ -20,7 +19,7 @@ input, textarea { font-size: 16px !important; }
 <div class="flex-1 flex flex-col justify-between">
 <div>
 <h1 class="text-lg sm:text-xl font-bold text-white">Style of Play Analyzer Pro</h1>
-<p class="text-[11px] sm:text-xs text-gray-400 mt-0.5">Global Live Slate — Focus: Pure H2H Trajectory & Direct Entry</p>
+<p class="text-[11px] sm:text-xs text-gray-400 mt-0.5">Global Live Slate — Focus: Weighted Aggregate Trajectory</p>
 </div>
 <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-4">
 <div id="quotaDisplay" class="text-xs bg-gray-900 border border-gray-800 rounded px-3 py-2 text-gray-400 hidden text-center sm:text-left h-full flex items-center justify-center sm:justify-start min-h-[38px]">
@@ -49,7 +48,7 @@ Remaining: &nbsp;<span id="apiRemaining" class="text-green-500 font-bold">-</spa
 <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
 <button onclick="filterDashboard('all')" id="filter-all" class="bg-gray-800 text-white text-xs px-2.5 py-2 rounded font-medium border border-gray-700 transition text-center min-h-[36px]">All Active (<span id="cnt-all">0</span>)</button>
 <button onclick="filterDashboard('over')" id="filter-over" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">🔥 Over 2.5 (<span id="cnt-over">0</span>)</button>
-<button onclick="filterDashboard('under')" id="filter-under" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">🛡️ Under 2.5 (<span id="cnt-under">0</span>)</button>
+<button onclick="filterDashboard('under')" id="filter-under" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">🛡️ Under 1.5 (<span id="cnt-under">0</span>)</button>
 <button onclick="filterDashboard('unscanned')" id="filter-unscanned" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">⏳ Unscanned (<span id="cnt-unscanned">0</span>)</button>
 </div>
 </div>
@@ -226,12 +225,12 @@ let sortedFixtures = [...allFixtures];
 
 if (activeFilter === 'over') {
 sortedFixtures = sortedFixtures
-.filter(f => scanResults[f.fixture.id] !== undefined && scanResults[f.fixture.id].h2hPct >= 40)
-.sort((a, b) => scanResults[b.fixture.id].h2hPct - scanResults[a.fixture.id].h2hPct);
+.filter(f => scanResults[f.fixture.id] !== undefined && scanResults[f.fixture.id].aggScore >= 50)
+.sort((a, b) => scanResults[b.fixture.id].aggScore - scanResults[a.fixture.id].aggScore);
 } else if (activeFilter === 'under') {
 sortedFixtures = sortedFixtures
-.filter(f => scanResults[f.fixture.id] !== undefined && scanResults[f.fixture.id].h2hPct < 40)
-.sort((a, b) => scanResults[a.fixture.id].h2hPct - scanResults[b.fixture.id].h2hPct);
+.filter(f => scanResults[f.fixture.id] !== undefined && scanResults[f.fixture.id].aggScore <= 20)
+.sort((a, b) => scanResults[a.fixture.id].aggScore - scanResults[b.fixture.id].aggScore);
 }
 
 document.getElementById('targetCount').innerText = sortedFixtures.length;
@@ -250,11 +249,17 @@ let displayClass = "";
 if (activeFilter === 'unscanned' && !isUnscanned) displayClass = "hidden";
 
 let cardBorderColor = "border-gray-900 bg-[#121620]";
+let badgeLabelHtml = "";
+
 if (res) {
-if (res.h2hPct >= 40) {
+if (res.aggScore >= 50) {
 cardBorderColor = "border-purple-500/50 bg-purple-950/10";
+badgeLabelHtml = `<span class="bg-purple-900/40 text-purple-400 border border-purple-800/60 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">🔥 OVER 2.5 INDEX: ${res.aggScore}%</span>`;
+} else if (res.aggScore <= 20) {
+cardBorderColor = "border-blue-500/50 bg-blue-950/10";
+badgeLabelHtml = `<span class="bg-blue-900/40 text-blue-400 border border-blue-800/60 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">🛡️ UNDER 1.5 INDEX: ${res.aggScore}%</span>`;
 } else {
-cardBorderColor = "border-blue-500/30 bg-blue-950/10";
+badgeLabelHtml = `<span class="bg-gray-800 text-gray-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">⚙️ NO BIAS INDEX: ${res.aggScore}%</span>`;
 }
 }
 
@@ -267,6 +272,7 @@ htmlBuffer += `
 <span class="text-green-500 text-[9px] uppercase tracking-normal">Unstarted</span>
 </div>
 <div class="min-w-0 flex-1">
+<div class="flex items-center gap-1.5 flex-wrap mb-0.5">${badgeLabelHtml}</div>
 <h3 class="text-white font-bold text-sm tracking-wide leading-snug break-words pr-2">
 <span class="home-name">${item.teams.home.name}</span>  
 <span class="text-gray-500 font-normal mx-0.5">v</span>  
@@ -308,8 +314,8 @@ let unscannedCount = unscannedFixtureIds.length;
 let overCount = 0;
 let underCount = 0;
 Object.values(scanResults).forEach(res => {
-if (res.h2hPct >= 40) overCount++;
-else underCount++;
+if (res.aggScore >= 50) overCount++;
+if (res.aggScore <= 20) underCount++;
 });
 
 document.getElementById('cnt-all').innerText = total;
@@ -463,6 +469,9 @@ const homeStats = calculateOver25Stats(homeFixtures);
 const awayStats = calculateOver25Stats(awayFixtures);
 const h2hStats = calculateOver25Stats(h2hFixtures);
 
+// Balanced formula prioritizing current form over old historical head-to-head records
+const aggScore = Math.round((homeStats.over25Pct * 0.4) + (awayStats.over25Pct * 0.4) + (h2hStats.over25Pct * 0.2));
+
 const dropdownHtml = `
 <div class="grid grid-cols-1 md:grid-cols-3 gap-2 p-1.5">
 ${generateDropdownHtml(`home-${fixtureId}`, "🏠 Home Form", homeStats, "text-white")}
@@ -472,7 +481,7 @@ ${generateDropdownHtml(`h2h-${fixtureId}`, "⚔️ Head-to-Head History", h2hSta
 `;
 
 scanResults[fixtureId] = {
-h2hPct: h2hStats.over25Pct,
+aggScore: aggScore,
 dropdownHtml: dropdownHtml
 };
 
@@ -489,7 +498,7 @@ btn.classList.add('text-gray-600');
 }
 
 function exportSelections() {
-let logText = `--- STYLE OF PLAY METRIC SELECTIONS (${activeFilter.toUpperCase()} FILTER) ---\n`;
+let logText = `--- STYLE OF PLAY WEIGHTED SELECTIONS (${activeFilter.toUpperCase()} FILTER) ---\n`;
 let count = 0;
 allFixtures.forEach(item => {
 const card = document.getElementById(`card-${item.fixture.id}`);
@@ -499,7 +508,7 @@ const dateObj = new Date(item.fixture.date);
 const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 logText += `[${formattedTime}] ${item.teams.home.name} vs ${item.teams.away.name} (${item.league.country} - ${item.league.name})`;
 if (res) {
-logText += ` -> H2H O2.5: ${res.h2hPct}%`;
+logText += ` -> Agg Score: ${res.aggScore}%`;
 } else {
 logText += ` -> [UNSCANNED]`;
 }
