@@ -19,7 +19,7 @@ input, textarea { font-size: 16px !important; }
 <div class="flex-1 flex flex-col justify-between">
 <div>
 <h1 class="text-lg sm:text-xl font-bold text-white">Style of Play Analyzer Pro</h1>
-<p class="text-[11px] sm:text-xs text-gray-400 mt-0.5">Global Live Slate — Focus: Weighted Aggregate & BTTS Trajectory</p>
+<p class="text-[11px] sm:text-xs text-gray-400 mt-0.5">Global Live Slate — 24/7 Active, Halftime & In-Play Tracking</p>
 </div>
 <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-4">
 <div id="quotaDisplay" class="text-xs bg-gray-900 border border-gray-800 rounded px-3 py-2 text-gray-400 hidden text-center sm:text-left h-full flex items-center justify-center sm:justify-start min-h-[38px]">
@@ -29,7 +29,7 @@ Remaining: &nbsp;<span id="apiRemaining" class="text-green-500 font-bold">-</spa
 <input type="password" id="apiKeyInput" placeholder="Enter API Key" class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-green-500 flex-1 sm:w-44 min-h-[38px]">
 <button onclick="saveApiKey()" class="bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-2 rounded transition font-semibold whitespace-nowrap min-h-[38px]">Save Key</button>
 </div>
-<button onclick="fetchTodayFixtures()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded transition font-semibold text-center whitespace-nowrap w-full sm:w-auto min-h-[38px]">Load Today's Matches</button>
+<button onclick="fetchTodayFixtures()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded transition font-semibold text-center whitespace-nowrap w-full sm:w-auto min-h-[38px]">Load Global Leagues Slate</button>
 </div>
 </div>
 
@@ -61,10 +61,10 @@ Remaining: &nbsp;<span id="apiRemaining" class="text-green-500 font-bold">-</spa
 
 <div id="dashboardContainer" class="space-y-6">
 <div>
-<h2 class="text-xs font-bold tracking-wider text-blue-500 uppercase flex items-center gap-1.5 mb-3 px-0.5">📅 UPCOMING TARGET WINDOW (<span id="targetCount">0</span>)</h2>
+<h2 class="text-xs font-bold tracking-wider text-blue-500 uppercase flex items-center gap-1.5 mb-3 px-0.5">🌍 GLOBAL LEAGUES CARD WINDOW (<span id="targetCount">0</span>)</h2>
 <div id="targetsContainer" class="space-y-3"></div>
 </div>
-<div id="emptyState" class="text-center py-12 text-sm text-gray-500 px-4">Enter your API key and click "Load Matches" or add custom values manually to get started.</div>
+<div id="emptyState" class="text-center py-12 text-sm text-gray-500 px-4">Enter your API key and click "Load Global Leagues Slate" or add custom values manually to get started.</div>
 </div>
 
 <script>
@@ -73,6 +73,9 @@ let allFixtures = [];
 let unscannedFixtureIds = [];
 let scanResults = {};
 let activeFilter = 'all'; 
+
+// White list of statuses that are unstarted, actively in play, or at halftime
+const validStatuses = ['NS', '1H', '2H', 'HT'];
 
 function init() {
 apiKey = localStorage.getItem('api_football_key') || "";
@@ -95,7 +98,7 @@ alert("Please enter and save your API key first.");
 return;
 }
 const container = document.getElementById('targetsContainer');
-container.innerHTML = "<div class='text-gray-400 text-sm animate-pulse p-2 text-center sm:text-left'>Syncing upcoming match slate...</div>";
+container.innerHTML = "<div class='text-gray-400 text-sm animate-pulse p-2 text-center sm:text-left'>Syncing 24/7 global league card...</div>";
 document.getElementById('emptyState').classList.add('hidden');
 document.getElementById('actionBar').classList.add('hidden');
 allFixtures = [];
@@ -103,7 +106,6 @@ scanResults = {};
 
 const tzoffset = (new Date()).getTimezoneOffset() * 60000;
 const todayStr = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
-const nowTimestamp = Date.now();
 
 try {
 const response = await fetch(`https://v3.football.api-sports.io/fixtures?date=${todayStr}`, {
@@ -115,9 +117,8 @@ const data = await response.json();
 
 if (data.response && data.response.length > 0) {
 allFixtures = data.response.filter(f => {
-const isNotStarted = f.fixture.status.short === 'NS';
-const isFutureMatch = new Date(f.fixture.date).getTime() > nowTimestamp;
-return isNotStarted && isFutureMatch;
+    // Completely removed current-time checks to run 24/7 across early & late slots
+    return validStatuses.includes(f.fixture.status.short);
 });
 }
 
@@ -130,7 +131,7 @@ updateBatchButtonText();
 updateFilterCounters();
 filterDashboard('all'); 
 } else {
-container.innerHTML = "<div class='text-gray-400 text-sm text-center p-4'>No future 'Not Started' matches remaining for today's card.</div>";
+container.innerHTML = "<div class='text-gray-400 text-sm text-center p-4'>No active, halftime, or upcoming matches found on today's global slate.</div>";
 }
 } catch (err) {
 container.innerHTML = "<div class='text-red-500 text-sm text-center p-4'>Network error. Check connection or token configuration.</div>";
@@ -148,7 +149,7 @@ if (resData.response && resData.response.length > 0) {
     let addedAny = false;
     resData.response.forEach(matchedFixture => {
         const isDuplicate = allFixtures.some(f => f.fixture.id === matchedFixture.fixture.id);
-        if (!isDuplicate && matchedFixture.fixture.status.short === 'NS') {
+        if (!isDuplicate && validStatuses.includes(matchedFixture.fixture.status.short)) {
             allFixtures.push(matchedFixture);
             unscannedFixtureIds.push(matchedFixture.fixture.id);
             addedAny = true;
@@ -211,6 +212,12 @@ document.getElementById('manualInput').value = "";
 renderAllFixtures();
 updateBatchButtonText();
 updateFilterCounters();
+}
+
+function getStatusBadge(shortStatus, elapsed) {
+if (shortStatus === 'NS') return `<span class="text-green-500 text-[9px] uppercase tracking-normal">Unstarted</span>`;
+if (shortStatus === 'HT') return `<span class="text-amber-500 text-[9px] font-bold uppercase tracking-normal animate-pulse">Halftime</span>`;
+return `<span class="text-red-500 text-[9px] font-bold uppercase tracking-normal animate-pulse">Live (${elapsed}')</span>`;
 }
 
 function renderAllFixtures() {
@@ -283,7 +290,7 @@ htmlBuffer += `
 <div class="flex items-start gap-2.5 min-w-0 flex-1">
 <div class="text-[10px] font-bold text-gray-500 tracking-wider mt-0.5 whitespace-nowrap flex flex-col min-w-[55px]">
 <span>${formattedTime}</span>
-<span class="text-green-500 text-[9px] uppercase tracking-normal">Unstarted</span>
+${getStatusBadge(item.fixture.status.short, item.fixture.status.elapsed)}
 </div>
 <div class="min-w-0 flex-1">
 <div class="flex items-center gap-1.5 flex-wrap mb-1">${badgesHtml}</div>
@@ -496,7 +503,6 @@ const homeStats = calculateStyleMetrics(homeFixtures);
 const awayStats = calculateStyleMetrics(awayFixtures);
 const h2hStats = calculateStyleMetrics(h2hFixtures);
 
-// Apply identical 40/40/20 scaling logic uniformly to both metrics
 const aggScore = Math.round((homeStats.over25Pct * 0.4) + (awayStats.over25Pct * 0.4) + (h2hStats.over25Pct * 0.2));
 const bttsScore = Math.round((homeStats.bttsPct * 0.4) + (awayStats.bttsPct * 0.4) + (h2hStats.bttsPct * 0.2));
 
