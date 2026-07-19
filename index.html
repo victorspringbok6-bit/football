@@ -25,10 +25,10 @@ Remaining: <span id="apiRemaining" class="text-green-500 font-bold">-</span> / <
 <input type="password" id="apiKeyInput" placeholder="Enter API-Football Key" class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-green-500 w-full sm:w-auto sm:flex-initial min-w-[140px]">
 <button onclick="saveApiKey()" class="bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-1.5 rounded transition flex-1 sm:flex-initial text-center whitespace-nowrap">Save Key</button>
 <button onclick="fetchTodayFixtures()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded transition flex-1 sm:flex-initial text-center whitespace-nowrap">Load Matches</button>
-<button id="batchScanBtn" onclick="runBatchScan()" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded transition flex-1 sm:flex-initial text-center whitespace-nowrap hidden">Scan Next 15 Matches</button>
 </div>
 </div>
-<div id="actionBar" class="hidden flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#121620] border border-gray-800 p-3 rounded-lg mb-6">
+<div id="actionBar" class="hidden flex flex-col gap-3 bg-[#121620] border border-gray-800 p-3 rounded-lg mb-6">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
 <div class="flex flex-wrap items-center gap-2">
 <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider mr-1">Filter View:</span>
 <button onclick="filterDashboard('all')" id="filter-all" class="bg-gray-800 text-white text-xs px-3 py-1.5 rounded font-medium border border-gray-700 transition">Show All Active (<span id="cnt-all">0</span>)</button>
@@ -36,11 +36,15 @@ Remaining: <span id="apiRemaining" class="text-green-500 font-bold">-</span> / <
 <button onclick="filterDashboard('under')" id="filter-under" class="bg-gray-900 text-gray-400 text-xs px-3 py-1.5 rounded font-medium border border-transparent hover:border-gray-700 transition">🛡️ Under 2.5 Targets (<span id="cnt-under">0</span>)</button>
 <button onclick="filterDashboard('unscanned')" id="filter-unscanned" class="bg-gray-900 text-gray-400 text-xs px-3 py-1.5 rounded font-medium border border-transparent hover:border-gray-700 transition">⏳ Unscanned (<span id="cnt-unscanned">0</span>)</button>
 </div>
-<button onclick="exportSelections()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded font-medium transition flex items-center justify-center gap-1">📋 Copy to Clipboard</button>
+<div class="flex items-center gap-2 justify-end w-full md:w-auto">
+<button id="batchScanBtn" onclick="runBatchScan()" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded transition font-medium text-center whitespace-nowrap">Scan All Remaining Matches</button>
+<button onclick="exportSelections()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded font-medium transition flex items-center justify-center gap-1">📋 Copy</button>
+</div>
+</div>
 </div>
 <div id="dashboardContainer" class="space-y-8">
 <div>
-<h2 class="text-sm font-bold tracking-wider text-blue-500 uppercase flex items-center gap-2 mb-3">📅 ACTIVE SCHEDULE (<span id="targetCount">0</span>) <span class="text-xs text-gray-500 normal-case font-normal">(Finished matches hidden)</span></h2>
+<h2 class="text-sm font-bold tracking-wider text-blue-500 uppercase flex items-center gap-2 mb-3">📅 UPCOMING CLEAN SCHEDULE (<span id="targetCount">0</span>) <span class="text-xs text-gray-500 normal-case font-normal">(Non-started matches only)</span></h2>
 <div id="targetsContainer" class="space-y-3"></div>
 </div>
 <div id="emptyState" class="text-center py-12 text-gray-500">Enter your API key and click "Load Matches" to sync today's global card.</div>
@@ -51,29 +55,6 @@ let allFixtures = [];
 let unscannedFixtureIds = [];
 let scanResults = {};
 let activeFilter = 'all'; 
-const BATCH_SIZE = 15;
-
-const statusMap = {
-'NS': 'Not Started',
-'1H': 'First Half',
-'HT': 'Halftime',
-'2H': 'Second Half',
-'ET': 'Extra Time',
-'BT': 'Break Time',
-'P': 'Penalty Shootout',
-'SUSP': 'Suspended',
-'INT': 'Interrupted',
-'PST': 'Postponed',
-'CANC': 'Cancelled',
-'CANCL': 'Cancelled',
-'ABD': 'Abandoned',
-'AET': 'After Extra Time',
-'FT': 'Full Time'
-};
-
-function getFullStatus(shortStatus) {
-return statusMap[shortStatus] || shortStatus;
-}
 
 function init() {
 apiKey = localStorage.getItem('api_football_key') || "";
@@ -94,7 +75,7 @@ alert("Please enter and save your API key first.");
 return;
 }
 const container = document.getElementById('targetsContainer');
-container.innerHTML = "<div class='text-gray-400 text-sm animate-pulse'>Syncing global match list...</div>";
+container.innerHTML = "<div class='text-gray-400 text-sm animate-pulse'>Syncing upcoming match slate...</div>";
 document.getElementById('emptyState').classList.add('hidden');
 document.getElementById('actionBar').classList.add('hidden');
 allFixtures = [];
@@ -112,20 +93,20 @@ updateQuotaHeaders(response.headers);
 const data = await response.json();
 
 if (data.response && data.response.length > 0) {
-allFixtures = data.response.filter(f => f.fixture.status.short !== 'FT');
+// STRICT REQUIREMENT: Only allow matches that have NOT STARTED yet
+allFixtures = data.response.filter(f => f.fixture.status.short === 'NS');
 }
 
 unscannedFixtureIds = allFixtures.map(f => f.fixture.id);
 renderAllFixtures();
 
 if (unscannedFixtureIds.length > 0) {
-document.getElementById('batchScanBtn').classList.remove('hidden');
 document.getElementById('actionBar').classList.remove('hidden');
 updateBatchButtonText();
 updateFilterCounters();
 filterDashboard('all'); 
 } else {
-container.innerHTML = "<div class='text-gray-400 text-sm'>No active or upcoming matches scheduled for today yet.</div>";
+container.innerHTML = "<div class='text-gray-400 text-sm'>No clean 'Not Started' matches scheduled for today.</div>";
 }
 } catch (err) {
 container.innerHTML = "<div class='text-red-500 text-sm'>Network error. Check connection or token configuration.</div>";
@@ -159,7 +140,6 @@ const dateObj = new Date(item.fixture.date);
 const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const homeScore = item.goals.home !== null ? item.goals.home : 0;
 const awayScore = item.goals.away !== null ? item.goals.away : 0;
-const fullStatus = getFullStatus(item.fixture.status.short);
 
 const res = scanResults[item.fixture.id];
 const isUnscanned = unscannedFixtureIds.includes(item.fixture.id);
@@ -183,7 +163,7 @@ htmlBuffer += `
 <div class="flex items-start gap-3 min-w-0 flex-1">
 <div class="text-xs font-semibold text-gray-500 tracking-wider mt-0.5 whitespace-nowrap flex flex-col">
 <span>${formattedTime}</span>
-<span class="text-green-500 font-bold text-[10px]">${fullStatus}</span>
+<span class="text-green-500 font-bold text-[10px]">Not Started</span>
 </div>
 <div class="min-w-0 flex-1">
 <h3 class="text-white font-bold text-sm tracking-wide break-words">
@@ -216,23 +196,18 @@ btn.innerText = "All Matches Scanned";
 btn.disabled = true;
 btn.classList.add('opacity-50', 'cursor-not-allowed');
 } else {
-const currentBatchSize = Math.min(BATCH_SIZE, remaining);
-btn.innerText = `Scan Next ${currentBatchSize} Matches (${remaining} Left)`;
+btn.innerText = `Scan All Remaining (${remaining} Left)`;
 }
 }
 
 function updateFilterCounters() {
 let total = allFixtures.length;
-let overCount = 0;
-let underCount = 0;
+let scannedCount = Object.keys(scanResults).length;
 let unscannedCount = unscannedFixtureIds.length;
-Object.values(scanResults).forEach(res => {
-overCount++;
-underCount++;
-});
+
 document.getElementById('cnt-all').innerText = total;
-document.getElementById('cnt-over').innerText = overCount;
-document.getElementById('cnt-under').innerText = underCount;
+document.getElementById('cnt-over').innerText = scannedCount;
+document.getElementById('cnt-under').innerText = scannedCount;
 document.getElementById('cnt-unscanned').innerText = unscannedCount;
 }
 
@@ -256,20 +231,23 @@ renderAllFixtures();
 async function runBatchScan() {
 const btn = document.getElementById('batchScanBtn');
 btn.disabled = true;
-btn.innerText = "Scanning Batch...";
-const currentBatch = unscannedFixtureIds.slice(0, BATCH_SIZE);
-for (const id of currentBatch) {
-const match = allFixtures.find(f => f.fixture.id === id);
+
+// Loops continuously until all items are scanned
+while (unscannedFixtureIds.length > 0) {
+const nextId = unscannedFixtureIds[0];
+btn.innerText = `Scanning... (${unscannedFixtureIds.length} Left)`;
+const match = allFixtures.find(f => f.fixture.id === nextId);
 if (match) {
 await analyzeForm(match.fixture.id, match.teams.home.id, match.teams.away.id);
-await new Promise(resolve => setTimeout(resolve, 250));
+// 200ms pause to ensure your premium tier API is completely safe from strict bursts
+await new Promise(resolve => setTimeout(resolve, 200));
+} else {
+unscannedFixtureIds.shift();
 }
 }
-unscannedFixtureIds = unscannedFixtureIds.filter(id => !currentBatch.includes(id));
+
 btn.disabled = false;
 updateBatchButtonText();
-updateFilterCounters();
-filterDashboard(activeFilter);
 }
 
 async function fetchTeamLast5(teamId) {
@@ -352,8 +330,8 @@ ${itemsHtml}
 }
 
 function toggleSectionDisplay(elementId) {
-const content = document.getElementById(`content-${elementId}`);
-const icon = document.getElementById(`icon-${elementId}`);
+const content = document.getElementById('content-' + elementId);
+const icon = document.getElementById('icon-' + elementId);
 if (content.classList.contains('hidden')) {
 content.classList.remove('hidden');
 icon.style.transform = "rotate(180deg)";
@@ -366,11 +344,13 @@ icon.style.transform = "rotate(0deg)";
 async function analyzeForm(fixtureId, homeId, awayId) {
 const btn = document.getElementById(`btn-${fixtureId}`);
 if (!btn || btn.innerText === "Analyzed") return;
+if (btn.innerText !== "...") {
 btn.disabled = true;
-btn.innerText = "Analyzing...";
+btn.innerText = "...";
+}
 try {
 const [homeFixtures, awayFixtures, h2hFixtures] = await Promise.all([
-fetchTeamLast5(homeId),
+fetchTeamLast5(teamId => fetchTeamLast5(homeId)), 
 fetchTeamLast5(awayId),
 fetchH2H(homeId, awayId)
 ]);
@@ -401,8 +381,12 @@ unscannedFixtureIds = unscannedFixtureIds.filter(idx => idx !== fixtureId);
 updateFilterCounters();
 filterDashboard(activeFilter);
 } catch (err) {
-btn.disabled = false;
-btn.innerText = "Failed - Retry";
+// Allow recovery if a specific endpoint stumbles
+unscannedFixtureIds = unscannedFixtureIds.filter(idx => idx !== fixtureId);
+if(btn) {
+btn.innerText = "Skipped";
+btn.classList.add('text-gray-600');
+}
 }
 }
 
@@ -417,7 +401,7 @@ const dateObj = new Date(item.fixture.date);
 const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 logText += `[${formattedTime}] ${item.teams.home.name} vs ${item.teams.away.name} (${item.league.country} - ${item.league.name})`;
 if (res) {
-logText += ` -> Home O2.5: ${res.homeStats.over25Pct}%, Away O2.5: ${res.awayStats.over25Pct}%`;
+logText += ` -> Combined O2.5: ${res.combinedOver}%, Combined U2.5: ${res.combinedUnder}%`;
 } else {
 logText += ` -> [UNSCANNED]`;
 }
