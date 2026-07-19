@@ -2,60 +2,69 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Style of Play Analyzer Pro</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-body { background-color: #0b0f17; color: #f3f4f6; font-family: ui-sans-serif, system-ui, sans-serif; }
+body { background-color: #0b0f17; color: #f3f4f6; font-family: ui-sans-serif, system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: #0b0f17; }
 ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
+/* Input styling overrides to prevent iOS default zooming */
+input, textarea { font-size: 16px !important; }
+@media (min-width: 768px) { input, textarea { font-size: 0.75rem !important; } }
 </style>
 </head>
-<body class="p-4 md:p-8 max-w-5xl mx-auto">
-<div class="flex flex-col lg:flex-row lg:items-start justify-between gap-6 mb-6 border-b border-gray-800 pb-6">
+<body class="p-3 sm:p-6 max-w-5xl mx-auto pb-12">
+<div class="flex flex-col lg:flex-row lg:items-stretch justify-between gap-4 mb-6 border-b border-gray-800 pb-6">
+<div class="flex-1 flex flex-col justify-between">
 <div>
-<h1 class="text-xl font-bold text-white">Style of Play Analyzer Pro</h1>
-<p class="text-xs text-gray-400 mt-1">Global Live Slate — Focus: Pure H2H Trajectory & Direct Entry</p>
-<div class="flex flex-wrap items-center gap-2 gap-y-3 mt-4 w-full lg:w-auto">
-<div id="quotaDisplay" class="text-xs bg-gray-900 border border-gray-800 rounded px-3 py-1.5 text-gray-400 hidden w-full sm:w-auto text-center sm:text-left">
-Remaining: <span id="apiRemaining" class="text-green-500 font-bold">-</span> / <span id="apiLimit">-</span>
+<h1 class="text-lg sm:text-xl font-bold text-white">Style of Play Analyzer Pro</h1>
+<p class="text-[11px] sm:text-xs text-gray-400 mt-0.5">Global Live Slate — Focus: Pure H2H Trajectory & Direct Entry</p>
 </div>
-<input type="password" id="apiKeyInput" placeholder="Enter API-Football Key" class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-green-500 w-full sm:w-auto sm:flex-initial min-w-[140px]">
-<button onclick="saveApiKey()" class="bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-1.5 rounded transition flex-1 sm:flex-initial text-center whitespace-nowrap">Save Key</button>
-<button onclick="fetchTodayFixtures()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded transition flex-1 sm:flex-initial text-center whitespace-nowrap">Load Matches</button>
+<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-4">
+<div id="quotaDisplay" class="text-xs bg-gray-900 border border-gray-800 rounded px-3 py-2 text-gray-400 hidden text-center sm:text-left h-full flex items-center justify-center sm:justify-start min-h-[38px]">
+Remaining: &nbsp;<span id="apiRemaining" class="text-green-500 font-bold">-</span> / <span id="apiLimit">-</span>
 </div>
+<div class="flex items-center gap-2 w-full sm:w-auto">
+<input type="password" id="apiKeyInput" placeholder="Enter API Key" class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-green-500 flex-1 sm:w-44 min-h-[38px]">
+<button onclick="saveApiKey()" class="bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-2 rounded transition font-semibold whitespace-nowrap min-h-[38px]">Save Key</button>
 </div>
-
-<div class="w-full lg:w-96 bg-[#121620] border border-gray-800 rounded-lg p-3">
-<label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Add Custom Matches Manually</label>
-<textarea id="manualInput" rows="2" placeholder="Paste text containing match / team names..." class="w-full bg-gray-950 border border-gray-700 rounded p-2 text-xs text-white focus:outline-none focus:border-purple-500 resize-none mb-2"></textarea>
-<button onclick="processManualInput()" class="w-full bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold py-1.5 rounded transition">Inject & Check Matches</button>
+<button onclick="fetchTodayFixtures()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-2 rounded transition font-semibold text-center whitespace-nowrap w-full sm:w-auto min-h-[38px]">Load Today's Matches</button>
 </div>
 </div>
 
-<div id="actionBar" class="hidden flex flex-col gap-3 bg-[#121620] border border-gray-800 p-3 rounded-lg mb-6">
-<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
-<div class="flex flex-wrap items-center gap-2">
-<span class="text-xs font-semibold text-gray-400 uppercase tracking-wider mr-1">Filter View:</span>
-<button onclick="filterDashboard('all')" id="filter-all" class="bg-gray-800 text-white text-xs px-3 py-1.5 rounded font-medium border border-gray-700 transition">Show All Active (<span id="cnt-all">0</span>)</button>
-<button onclick="filterDashboard('over')" id="filter-over" class="bg-gray-900 text-gray-400 text-xs px-3 py-1.5 rounded font-medium border border-transparent hover:border-gray-700 transition">🔥 Over 2.5 (H2H ≥ 40%) (<span id="cnt-over">0</span>)</button>
-<button onclick="filterDashboard('under')" id="filter-under" class="bg-gray-900 text-gray-400 text-xs px-3 py-1.5 rounded font-medium border border-transparent hover:border-gray-700 transition">🛡️ Under 2.5 (H2H &lt; 40%) (<span id="cnt-under">0</span>)</button>
-<button onclick="filterDashboard('unscanned')" id="filter-unscanned" class="bg-gray-900 text-gray-400 text-xs px-3 py-1.5 rounded font-medium border border-transparent hover:border-gray-700 transition">⏳ Unscanned (<span id="cnt-unscanned">0</span>)</button>
-</div>
-<div class="flex items-center gap-2 justify-end w-full md:w-auto">
-<button id="batchScanBtn" onclick="runBatchScan()" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded transition font-medium text-center whitespace-nowrap">Scan All Remaining Matches</button>
-<button onclick="exportSelections()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded font-medium transition flex items-center justify-center gap-1">📋 Copy</button>
-</div>
-</div>
-</div>
-
-<div id="dashboardContainer" class="space-y-8">
+<div class="w-full lg:w-96 bg-[#121620] border border-gray-800 rounded-lg p-3.5 flex flex-col justify-between">
 <div>
-<h2 class="text-sm font-bold tracking-wider text-blue-500 uppercase flex items-center gap-2 mb-3">📅 UPCOMING TARGET WINDOW (<span id="targetCount">0</span>) <span class="text-xs text-gray-500 normal-case font-normal">(Future matchups only)</span></h2>
+<label class="block text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Add Custom Matches Manually</label>
+<textarea id="manualInput" rows="2" placeholder="Paste text containing match / team names..." class="w-full bg-gray-950 border border-gray-700 rounded p-2 text-xs text-white focus:outline-none focus:border-purple-500 resize-none mb-2 min-h-[50px]"></textarea>
+</div>
+<button onclick="processManualInput()" class="w-full bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold py-2 rounded transition min-h-[38px]">Inject & Check Matches</button>
+</div>
+</div>
+
+<div id="actionBar" class="hidden bg-[#121620] border border-gray-800 p-3 rounded-lg mb-6 flex flex-col gap-3.5">
+<div class="flex flex-col gap-2">
+<span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Filter View:</span>
+<div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+<button onclick="filterDashboard('all')" id="filter-all" class="bg-gray-800 text-white text-xs px-2.5 py-2 rounded font-medium border border-gray-700 transition text-center min-h-[36px]">All Active (<span id="cnt-all">0</span>)</button>
+<button onclick="filterDashboard('over')" id="filter-over" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">🔥 Over 2.5 (<span id="cnt-over">0</span>)</button>
+<button onclick="filterDashboard('under')" id="filter-under" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">🛡️ Under 2.5 (<span id="cnt-under">0</span>)</button>
+<button onclick="filterDashboard('unscanned')" id="filter-unscanned" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">⏳ Unscanned (<span id="cnt-unscanned">0</span>)</button>
+</div>
+</div>
+<div class="flex items-center gap-2 w-full pt-1 border-t border-gray-800/60 md:border-t-0 md:pt-0 justify-end">
+<button id="batchScanBtn" onclick="runBatchScan()" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-4 py-2 rounded transition font-semibold text-center whitespace-nowrap flex-1 sm:flex-none min-h-[36px]">Scan Remaining Matches</button>
+<button onclick="exportSelections()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-2 rounded font-semibold transition flex items-center justify-center gap-1 min-h-[36px]">📋 Copy</button>
+</div>
+</div>
+
+<div id="dashboardContainer" class="space-y-6">
+<div>
+<h2 class="text-xs font-bold tracking-wider text-blue-500 uppercase flex items-center gap-1.5 mb-3 px-0.5">📅 UPCOMING TARGET WINDOW (<span id="targetCount">0</span>)</h2>
 <div id="targetsContainer" class="space-y-3"></div>
 </div>
-<div id="emptyState" class="text-center py-12 text-gray-500">Enter your API key and click "Load Matches" or add custom values manually to get started.</div>
+<div id="emptyState" class="text-center py-12 text-sm text-gray-500 px-4">Enter your API key and click "Load Matches" or add custom values manually to get started.</div>
 </div>
 
 <script>
@@ -86,7 +95,7 @@ alert("Please enter and save your API key first.");
 return;
 }
 const container = document.getElementById('targetsContainer');
-container.innerHTML = "<div class='text-gray-400 text-sm animate-pulse'>Syncing upcoming match slate...</div>";
+container.innerHTML = "<div class='text-gray-400 text-sm animate-pulse p-2 text-center sm:text-left'>Syncing upcoming match slate...</div>";
 document.getElementById('emptyState').classList.add('hidden');
 document.getElementById('actionBar').classList.add('hidden');
 allFixtures = [];
@@ -121,14 +130,13 @@ updateBatchButtonText();
 updateFilterCounters();
 filterDashboard('all'); 
 } else {
-container.innerHTML = "<div class='text-gray-400 text-sm'>No future 'Not Started' matches remaining for today's card.</div>";
+container.innerHTML = "<div class='text-gray-400 text-sm text-center p-4'>No future 'Not Started' matches remaining for today's card.</div>";
 }
 } catch (err) {
-container.innerHTML = "<div class='text-red-500 text-sm'>Network error. Check connection or token configuration.</div>";
+container.innerHTML = "<div class='text-red-500 text-sm text-center p-4'>Network error. Check connection or token configuration.</div>";
 }
 }
 
-// Global scope search runner helper to prevent asynchronous scoping bugs
 async function makeSearchCall(searchString, todayStr) {
 try {
 const response = await fetch(`https://v3.football.api-sports.io/fixtures?date=${todayStr}&search=${encodeURIComponent(searchString)}`, {
@@ -187,10 +195,8 @@ for (let term of searchTerms) {
     );
     if (alreadyExists) continue; 
 
-    // Primary search run: try using full text block
     let success = await makeSearchCall(cleanQuery, todayStr);
 
-    // Secondary fallback run: if no response, loop through words
     if (!success) {
         let words = cleanQuery.split(' ').filter(w => w.length > 3);
         for (let word of words) {
@@ -253,28 +259,28 @@ cardBorderColor = "border-blue-500/30 bg-blue-950/10";
 }
 
 htmlBuffer += `
-<div id="card-${item.fixture.id}" class="fixture-card ${cardBorderColor} rounded-lg p-4 flex flex-col gap-3 shadow-md transition-all duration-300 ${displayClass}">
-<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
-<div class="flex items-start gap-3 min-w-0 flex-1">
-<div class="text-xs font-semibold text-gray-500 tracking-wider mt-0.5 whitespace-nowrap flex flex-col">
+<div id="card-${item.fixture.id}" class="fixture-card ${cardBorderColor} rounded-lg p-3 sm:p-4 flex flex-col gap-3 shadow-md border transition-all duration-300 ${displayClass}">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+<div class="flex items-start gap-2.5 min-w-0 flex-1">
+<div class="text-[10px] font-bold text-gray-500 tracking-wider mt-0.5 whitespace-nowrap flex flex-col min-w-[55px]">
 <span>${formattedTime}</span>
-<span class="text-green-500 font-bold text-[10px]">Not Started</span>
+<span class="text-green-500 text-[9px] uppercase tracking-normal">Unstarted</span>
 </div>
 <div class="min-w-0 flex-1">
-<h3 class="text-white font-bold text-sm tracking-wide break-words">
+<h3 class="text-white font-bold text-sm tracking-wide leading-snug break-words pr-2">
 <span class="home-name">${item.teams.home.name}</span>  
-<span class="text-gray-500 font-normal mx-1">v</span>  
+<span class="text-gray-500 font-normal mx-0.5">v</span>  
 <span class="away-name">${item.teams.away.name}</span>
-<span class="text-amber-400 ml-2 font-mono text-xs">(${homeScore} - ${awayScore})</span>
+<span class="text-amber-400 font-mono text-xs whitespace-nowrap">(${homeScore}-${awayScore})</span>
 </h3>
-<span class="text-[10px] text-gray-400 font-light flex items-center gap-1 truncate">🚩 <span class="league-info">${item.league.country} - ${item.league.name}</span></span>
+<span class="text-[10px] text-gray-400 font-light flex items-center gap-1 truncate mt-0.5">🚩 <span class="league-info">${item.league.country} - ${item.league.name}</span></span>
 </div>
 </div>
-<div class="flex items-center gap-2 justify-end">
-<button id="btn-${item.fixture.id}" onclick="analyzeForm(${item.fixture.id}, ${item.teams.home.id}, ${item.teams.away.id})" class="bg-purple-600 hover:bg-purple-500 text-white text-[11px] px-3 py-1 rounded transition ${res ? 'bg-gray-800 text-gray-500 pointer-events-none' : ''}">${res ? 'Analyzed' : 'Analyze Match'}</button>
+<div class="flex items-center justify-end w-full sm:w-auto pt-2 border-t border-gray-800/40 sm:border-t-0 sm:pt-0">
+<button id="btn-${item.fixture.id}" onclick="analyzeForm(${item.fixture.id}, ${item.teams.home.id}, ${item.teams.away.id})" class="bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold px-4 py-2 sm:py-1 rounded transition w-full sm:w-auto min-h-[34px] sm:min-h-0 ${res ? 'bg-gray-800 text-gray-500 pointer-events-none' : ''}">${res ? 'Analyzed' : 'Analyze Match'}</button>
 </div>
 </div>
-<div id="analysis-${item.fixture.id}" class="${res ? '' : 'hidden'} mt-2 bg-gray-900/50 border border-gray-800 rounded p-1 text-xs text-gray-300 flex flex-col gap-1">
+<div id="analysis-${item.fixture.id}" class="${res ? '' : 'hidden'} mt-1 bg-gray-900/40 border border-gray-800/80 rounded p-1 text-xs text-gray-300 flex flex-col gap-1">
 ${res ? res.dropdownHtml : ''}
 </div>
 </div>
@@ -291,7 +297,7 @@ btn.innerText = "All Matches Scanned";
 btn.disabled = true;
 btn.classList.add('opacity-50', 'cursor-not-allowed');
 } else {
-btn.innerText = `Scan All Remaining (${remaining} Left)`;
+btn.innerText = `Scan Remaining (${remaining})`;
 }
 }
 
@@ -335,7 +341,7 @@ btn.disabled = true;
 
 while (unscannedFixtureIds.length > 0) {
 const nextId = unscannedFixtureIds[0];
-btn.innerText = `Scanning... (${unscannedFixtureIds.length} Left)`;
+btn.innerText = `Scanning... (${unscannedFixtureIds.length})`;
 const match = allFixtures.find(f => f.fixture.id === nextId);
 if (match) {
 await analyzeForm(match.fixture.id, match.teams.home.id, match.teams.away.id);
@@ -397,12 +403,12 @@ list: matchDetailsList
 function generateDropdownHtml(id, title, stats, titleColorClass = "text-white") {
 let itemsHtml = "";
 if (stats.list.length === 0) {
-itemsHtml = `<div class="p-2 text-[11px] text-gray-500">No recent match history found.</div>`;
+itemsHtml = `<div class="p-2 text-[11px] text-gray-500 text-center">No history found.</div>`;
 } else {
 stats.list.forEach(m => {
 const badgeColor = m.isOver ? "bg-purple-900/40 text-purple-400 border border-purple-800/60" : "bg-gray-800 text-gray-400";
 itemsHtml += `
-<div class="flex items-center justify-between p-1.5 border-b border-gray-800/50 last:border-0 text-[11px]">
+<div class="flex items-center justify-between p-2 border-b border-gray-800/50 last:border-0 text-[11px]">
 <span class="truncate pr-2 text-gray-400">${m.home} <span class="text-gray-600">v</span> ${m.away}</span>
 <div class="flex items-center gap-1.5 flex-shrink-0">
 <span class="font-mono font-bold text-gray-300">${m.score}</span>
@@ -414,10 +420,10 @@ itemsHtml += `
 }
 return `
 <div class="border border-gray-800 rounded bg-gray-950/40 overflow-hidden">
-<button onclick="toggleSectionDisplay('${id}')" class="w-full flex items-center justify-between p-2.5 hover:bg-gray-900/40 transition text-left">
-<div>
+<button onclick="toggleSectionDisplay('${id}')" class="w-full flex items-center justify-between p-2.5 hover:bg-gray-900/40 transition text-left min-h-[38px]">
+<div class="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1.5">
 <span class="font-semibold text-xs ${titleColorClass}">${title}</span>
-<span class="text-[10px] text-gray-500 ml-1.5">O2.5: <strong class="text-purple-400">${stats.over25Pct}%</strong> | Avg: <strong class="text-gray-300">${stats.avgGoals}</strong></span>
+<span class="text-[10px] text-gray-500">O2.5: <strong class="text-purple-400">${stats.over25Pct}%</strong> | Avg: <strong class="text-gray-300">${stats.avgGoals}</strong></span>
 </div>
 <span id="icon-${id}" class="text-gray-500 text-[10px] transform transition-transform">▼</span>
 </button>
@@ -459,8 +465,8 @@ const h2hStats = calculateOver25Stats(h2hFixtures);
 
 const dropdownHtml = `
 <div class="grid grid-cols-1 md:grid-cols-3 gap-2 p-1.5">
-${generateDropdownHtml(`home-${fixtureId}`, "🏠 Home Form (Last 5)", homeStats, "text-white")}
-${generateDropdownHtml(`away-${fixtureId}`, "🚀 Away Form (Last 5)", awayStats, "text-white")}
+${generateDropdownHtml(`home-${fixtureId}`, "🏠 Home Form", homeStats, "text-white")}
+${generateDropdownHtml(`away-${fixtureId}`, "🚀 Away Form", awayStats, "text-white")}
 ${generateDropdownHtml(`h2h-${fixtureId}`, "⚔️ Head-to-Head History", h2hStats, "text-amber-400")}
 </div>
 `;
@@ -506,7 +512,7 @@ alert("No visible matches available to export.");
 return;
 }
 navigator.clipboard.writeText(logText).then(() => {
-alert(`Successfully copied ${count} fixtures to clipboard!`);
+alert(`Copied ${count} matches!`);
 }).catch(err => {
 alert("Failed to write clipboard data.");
 });
