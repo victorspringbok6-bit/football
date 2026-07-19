@@ -31,8 +31,8 @@ Remaining: <span id="apiRemaining" class="text-green-500 font-bold">-</span> / <
 <div id="actionBar" class="hidden flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#121620] border border-gray-800 p-3 rounded-lg mb-6">
 <div class="flex flex-wrap items-center gap-2">
 <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider mr-1">Filter View:</span>
-<button onclick="filterDashboard('over')" id="filter-over" class="bg-gray-800 text-white text-xs px-3 py-1.5 rounded font-medium border border-gray-700 transition">🔥 Over 2.5 Targets (<span id="cnt-over">0</span>)</button>
-<button onclick="filterDashboard('all')" id="filter-all" class="bg-gray-900 text-gray-400 text-xs px-3 py-1.5 rounded font-medium border border-transparent hover:border-gray-700 transition">Show All Active (<span id="cnt-all">0</span>)</button>
+<button onclick="filterDashboard('all')" id="filter-all" class="bg-gray-800 text-white text-xs px-3 py-1.5 rounded font-medium border border-gray-700 transition">Show All Active (<span id="cnt-all">0</span>)</button>
+<button onclick="filterDashboard('over')" id="filter-over" class="bg-gray-900 text-gray-400 text-xs px-3 py-1.5 rounded font-medium border border-transparent hover:border-gray-700 transition">🔥 Over 2.5 Targets (<span id="cnt-over">0</span>)</button>
 <button onclick="filterDashboard('under')" id="filter-under" class="bg-gray-900 text-gray-400 text-xs px-3 py-1.5 rounded font-medium border border-transparent hover:border-gray-700 transition">🛡️ Under 2.5 Targets (<span id="cnt-under">0</span>)</button>
 <button onclick="filterDashboard('unscanned')" id="filter-unscanned" class="bg-gray-900 text-gray-400 text-xs px-3 py-1.5 rounded font-medium border border-transparent hover:border-gray-700 transition">⏳ Unscanned (<span id="cnt-unscanned">0</span>)</button>
 </div>
@@ -50,7 +50,7 @@ let apiKey = localStorage.getItem('api_football_key') || "";
 let allFixtures = [];
 let unscannedFixtureIds = [];
 let scanResults = {};
-let activeFilter = 'over'; 
+let activeFilter = 'all'; 
 const BATCH_SIZE = 15;
 
 function init() {
@@ -101,7 +101,7 @@ document.getElementById('batchScanBtn').classList.remove('hidden');
 document.getElementById('actionBar').classList.remove('hidden');
 updateBatchButtonText();
 updateFilterCounters();
-filterDashboard('over'); 
+filterDashboard('all'); 
 } else {
 container.innerHTML = "<div class='text-gray-400 text-sm'>No active or upcoming matches scheduled for today yet.</div>";
 }
@@ -125,7 +125,7 @@ const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: 
 const homeScore = item.goals.home !== null ? item.goals.home : 0;
 const awayScore = item.goals.away !== null ? item.goals.away : 0;
 htmlBuffer += `
-<div id="card-${item.fixture.id}" class="fixture-card bg-[#121620] border border-gray-900 rounded-lg p-4 flex flex-col gap-3 shadow-md transition-all duration-300 hidden">
+<div id="card-${item.fixture.id}" class="fixture-card bg-[#121620] border border-gray-900 rounded-lg p-4 flex flex-col gap-3 shadow-md transition-all duration-300">
 <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
 <div class="flex items-start gap-3 min-w-0 flex-1">
 <div class="text-xs font-semibold text-gray-500 tracking-wider mt-0.5 whitespace-nowrap flex flex-col">
