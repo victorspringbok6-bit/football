@@ -1,64 +1,99 @@
-async function fetchGlobalSlate() {
-    if (!apiKey) {
-        alert("Please enter and save your API key first.");
-        return;
-    }
-    const container = document.getElementById('targetsContainer');
-    container.innerHTML = "<div class='text-gray-400 text-sm animate-pulse p-2 text-center sm:text-left'>Loading massive multi-league daily schedule...</div>";
-    document.getElementById('emptyState').classList.add('hidden');
-    document.getElementById('actionBar').classList.add('hidden');
-    allFixtures = [];
-    scanResults = {};
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Football Analyzer</title>
+</head>
+<body>
+    <!-- Your HTML Layout elements go here -->
 
-    // 1. Calculate local YYYY-MM-DD cleanly based on your device clock
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
+    <script>
+        // Global State Configuration
+        let apiKey = localStorage.getItem('football_api_key') || '';
+        let allFixtures = [];
+        let unscannedFixtureIds = [];
+        let scanResults = {};
+        let activeFilter = 'all';
 
-    // 2. Detect browser timezone
-    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        // Valid statuses including Finished (FT) for late-night viewing
+        const validStatuses = ['NS', '1H', '2H', 'HT', 'FT'];
 
-    try {
-        // Attempt 1: Fetch with explicit timezone parameter
-        let url = `https://v3.football.api-sports.io/fixtures?date=${todayStr}&timezone=${encodeURIComponent(userTimezone)}`;
-        let response = await fetch(url, {
-            "method": "GET",
-            "headers": { "x-apisports-key": apiKey }
-        });
-        updateQuotaHeaders(response.headers);
-        let data = await response.json();
-
-        // Fallback Check: If the strict API timezone filter rejected the query or returned 0 items
-        if (!data.response || data.response.length === 0) {
-            console.log("Timezone string unaligned with API list. Dropping timezone parameter for safety fallback.");
-            url = `https://v3.football.api-sports.io/fixtures?date=${todayStr}`;
-            response = await fetch(url, {
-                "method": "GET",
-                "headers": { "x-apisports-key": apiKey }
-            });
-            data = await response.json();
+        function updateQuotaHeaders(headers) {
+            // Placeholder for your quota dashboard updates
+            console.log("Updating headers...");
         }
 
-        if (data.response && data.response.length > 0) {
-            allFixtures = data.response.filter(f => validStatuses.includes(f.fixture.status.short));
-            allFixtures.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date));
+        function renderAllFixtures() {
+            // Placeholder for rendering your UI items
+            console.log("Rendering fixtures...");
         }
 
-        unscannedFixtureIds = allFixtures.map(f => f.fixture.id);
-        renderAllFixtures();
+        function updateBatchButtonText() { if(document.getElementById('batchBtn')) {} }
+        function updateFilterCounters() { if(document.getElementById('counter')) {} }
+        function filterDashboard(val) { console.log("Filtering: " + val); }
 
-        if (allFixtures.length > 0) {
-            document.getElementById('actionBar').classList.remove('hidden');
-            updateBatchButtonText();
-            updateFilterCounters();
-            filterDashboard('all'); 
-        } else {
-            container.innerHTML = "<div class='text-gray-400 text-sm text-center p-4'>No matching games found for today's card framework.</div>";
+        async function fetchGlobalSlate() {
+            if (!apiKey) {
+                alert("Please enter and save your API key first.");
+                return;
+            }
+            const container = document.getElementById('targetsContainer') || document.body;
+            
+            allFixtures = [];
+            scanResults = {};
+
+            // 1. Calculate local YYYY-MM-DD based on system device clock
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const todayStr = `${year}-${month}-${day}`;
+
+            // 2. Detect browser timezone
+            const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+            try {
+                // Attempt 1: Fetch with explicit timezone parameter
+                let url = `https://v3.football.api-sports.io/fixtures?date=${todayStr}&timezone=${encodeURIComponent(userTimezone)}`;
+                let response = await fetch(url, {
+                    "method": "GET",
+                    "headers": { "x-apisports-key": apiKey }
+                });
+                updateQuotaHeaders(response.headers);
+                let data = await response.json();
+
+                // Fallback Check: If the strict API timezone filter rejected or returned 0 items
+                if (!data.response || data.response.length === 0) {
+                    console.log("Timezone string unaligned with API list. Dropping timezone parameter for safety fallback.");
+                    url = `https://v3.football.api-sports.io/fixtures?date=${todayStr}`;
+                    response = await fetch(url, {
+                        "method": "GET",
+                        "headers": { "x-apisports-key": apiKey }
+                    });
+                    data = await response.json();
+                }
+
+                if (data.response && data.response.length > 0) {
+                    allFixtures = data.response.filter(f => validStatuses.includes(f.fixture.status.short));
+                    allFixtures.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date));
+                }
+
+                unscannedFixtureIds = allFixtures.map(f => f.fixture.id);
+                renderAllFixtures();
+
+                if (allFixtures.length > 0) {
+                    if(document.getElementById('actionBar')) document.getElementById('actionBar').classList.remove('hidden');
+                    updateBatchButtonText();
+                    updateFilterCounters();
+                    filterDashboard('all'); 
+                } else {
+                    container.innerHTML = "<div class='text-gray-400 text-sm text-center p-4'>No matching games found for today's card framework.</div>";
+                }
+            } catch (err) {
+                console.error("Slate sync error: ", err);
+                container.innerHTML = "<div class='text-red-500 text-sm text-center p-4'>Network error. Check connection or token configuration.</div>";
+            }
         }
-    } catch (err) {
-        console.error("Slate sync error: ", err);
-        container.innerHTML = "<div class='text-red-500 text-sm text-center p-4'>Network error. Check connection or token configuration.</div>";
-    }
-}
+    </script>
+</body>
+</html>
