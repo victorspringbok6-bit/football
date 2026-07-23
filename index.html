@@ -47,6 +47,8 @@ Remaining: &nbsp;<span id="apiRemaining" class="text-green-500 font-bold">-</spa
 <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Prediction Filters & Performance:</span>
 <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
 <button onclick="filterDashboard('all')" id="filter-all" class="bg-gray-800 text-white text-xs px-2.5 py-2 rounded font-medium border border-gray-700 transition text-center min-h-[36px]">All Active (<span id="cnt-all">0</span>)</button>
+<button onclick="filterDashboard('upcoming')" id="filter-upcoming" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">📅 Upcoming (<span id="cnt-upcoming">0</span>)</button>
+<button onclick="filterDashboard('finished')" id="filter-finished" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">🏁 Finished (<span id="cnt-finished">0</span>)</button>
 <button onclick="filterDashboard('over')" id="filter-over" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">🔥 Over 2.5 (<span id="cnt-over">0</span>)<span id="wr-over" class="block text-[9px] text-purple-400 font-bold mt-0.5"></span></button>
 <button onclick="filterDashboard('under')" id="filter-under" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">🛡️ Under 1.5 (<span id="cnt-under">0</span>)<span id="wr-under" class="block text-[9px] text-blue-400 font-bold mt-0.5"></span></button>
 <button onclick="filterDashboard('btts')" id="filter-btts" class="bg-gray-900 text-gray-400 text-xs px-2.5 py-2 rounded font-medium border border-transparent hover:border-gray-700 transition text-center min-h-[36px]">⚽ BTTS Yes (<span id="cnt-btts">0</span>)<span id="wr-btts" class="block text-[9px] text-emerald-400 font-bold mt-0.5"></span></button>
@@ -76,20 +78,17 @@ let unscannedFixtureIds = [];
 let scanResults = {};
 let activeFilter = 'all'; 
 
-// We only care about displaying predictions, HT results, and final FT outcomes
 const targetStatuses = ['NS', 'HT', 'FT'];
 
 function init() {
     apiKey = localStorage.getItem('api_football_key') || "";
     document.getElementById('apiKeyInput').value = apiKey;
 
-    // Load cached slate if available to save tokens
     const cachedData = localStorage.getItem('daily_slate_data');
     const cachedScan = localStorage.getItem('daily_scan_results');
     const lastFetchDate = localStorage.getItem('daily_slate_date');
 
     const now = new Date();
-    // Get current Irish Time ISO Date String (YYYY-MM-DD)
     const currentIrishDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Dublin' }).format(now);
 
     if (cachedData && lastFetchDate === currentIrishDate) {
@@ -142,7 +141,6 @@ async function fetchGlobalSlate(forceRefresh = false) {
             allFixtures = data.response.filter(f => targetStatuses.includes(f.fixture.status.short));
             allFixtures.sort((a, b) => new Date(a.fixture.date) - new Date(b.fixture.date));
             
-            // Cache to local storage to save tokens
             localStorage.setItem('daily_slate_data', JSON.stringify(allFixtures));
             localStorage.setItem('daily_slate_date', irishDateStr);
         }
@@ -180,7 +178,11 @@ function renderAllFixtures() {
 
     let sortedFixtures = [...allFixtures];
 
-    if (activeFilter === 'over') {
+    if (activeFilter === 'upcoming') {
+        sortedFixtures = sortedFixtures.filter(f => f.fixture.status.short === 'NS');
+    } else if (activeFilter === 'finished') {
+        sortedFixtures = sortedFixtures.filter(f => f.fixture.status.short === 'FT');
+    } else if (activeFilter === 'over') {
         sortedFixtures = sortedFixtures.filter(f => scanResults[f.fixture.id] && scanResults[f.fixture.id].aggScore >= 50);
     } else if (activeFilter === 'under') {
         sortedFixtures = sortedFixtures.filter(f => scanResults[f.fixture.id] && scanResults[f.fixture.id].aggScore <= 20);
@@ -199,7 +201,6 @@ function renderAllFixtures() {
         const dateObj = new Date(item.fixture.date);
         const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
-        // Show score display only for HT or FT
         const isHTorFT = item.fixture.status.short === 'HT' || item.fixture.status.short === 'FT';
         const homeScore = item.goals.home !== null ? item.goals.home : 0;
         const awayScore = item.goals.away !== null ? item.goals.away : 0;
@@ -289,6 +290,8 @@ function updateBatchButtonText() {
 function updateFilterCounters() {
     let total = allFixtures.length;
     let unscannedCount = unscannedFixtureIds.length;
+    let upcomingCount = 0;
+    let finishedCount = 0;
 
     let overCount = 0, underCount = 0, bttsCount = 0, fhCount = 0, shCount = 0;
     
@@ -301,6 +304,9 @@ function updateFilterCounters() {
     };
 
     allFixtures.forEach(f => {
+        if (f.fixture.status.short === 'NS') upcomingCount++;
+        if (f.fixture.status.short === 'FT') finishedCount++;
+
         const res = scanResults[f.fixture.id];
         if (!res) return;
 
@@ -337,6 +343,8 @@ function updateFilterCounters() {
     });
 
     document.getElementById('cnt-all').innerText = total;
+    document.getElementById('cnt-upcoming').innerText = upcomingCount;
+    document.getElementById('cnt-finished').innerText = finishedCount;
     document.getElementById('cnt-over').innerText = overCount;
     document.getElementById('cnt-under').innerText = underCount;
     document.getElementById('cnt-btts').innerText = bttsCount;
@@ -359,7 +367,7 @@ function updateFilterCounters() {
 
 function filterDashboard(type) {
     activeFilter = type;
-    const buttons = ['all', 'over', 'under', 'btts', 'fh', 'sh', 'unscanned'];
+    const buttons = ['all', 'upcoming', 'finished', 'over', 'under', 'btts', 'fh', 'sh', 'unscanned'];
     buttons.forEach(btnType => {
         const el = document.getElementById(`filter-${btnType}`);
         if (!el) return;
@@ -543,7 +551,6 @@ async function analyzeForm(fixtureId, homeId, awayId) {
             dropdownHtml: dropdownHtml
         };
 
-        // Cache scan results to local storage to save tokens
         localStorage.setItem('daily_scan_results', JSON.stringify(scanResults));
 
         unscannedFixtureIds = unscannedFixtureIds.filter(idx => idx !== fixtureId);
