@@ -1,1 +1,308 @@
+-gray-400">
+                <th class="p-2">Fixture</th>
+                <th class="p-2">Market Target</th>
+                <th class="p-2">Model Odds</th>
+                <th class="p-2">Confidence</th>
+                <th class="p-2">Actual Result</th>
+                <th class="p-2">Audit Status</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody" class="divide-y divide-gray-800/50">
+              <tr>
+                <td colspan="6" class="p-4 text-center text-gray-500">No audited predictions stored yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
+    <!-- VIEW 4: Model Performance & Learning Weights -->
+    <section id="view-performance" class="space-y-4 hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-[#121620] border border-gray-800 p-4 rounded-lg">
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider mb-3">Model Weight Calibration Matrix</h2>
+          <pre id="modelWeightsDisplay" class="bg-gray-950 p-3 rounded border border-gray-800 text-[11px] text-green-400 font-mono overflow-x-auto"></pre>
+        </div>
+        <div class="bg-[#121620] border border-gray-800 p-4 rounded-lg">
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider mb-3">Feature Importance Impact</h2>
+          <div id="featureImportanceList" class="space-y-2 text-xs text-gray-300">
+            <!-- Dynamic Feature Contributions -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- JS Architecture Injection -->
+  <script type="module">
+    // =========================================================================
+    // MODULE 1: STORAGE ENGINE (IndexedDB Core Persistence)
+    // =========================================================================
+    class StorageEngine {
+      constructor() {
+        this.dbName = 'FootballAnalyticsDB';
+        this.db = null;
+      }
+
+      async init() {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(this.dbName, 1);
+          request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' });
+            if (!db.objectStoreNames.contains('audits')) db.createObjectStore('audits', { keyPath: 'fixtureId' });
+            if (!db.objectStoreNames.contains('weights')) db.createObjectStore('weights', { keyPath: 'market' });
+          };
+          request.onsuccess = (e) => { this.db = e.target.result; resolve(); };
+          request.onerror = (e) => reject(e);
+        });
+      }
+
+      async getCache(key) {
+        return new Promise((resolve) => {
+          const tx = this.db.transaction('cache', 'readonly');
+          const store = tx.objectStore('cache');
+          const req = store.get(key);
+          req.onsuccess = () => resolve(req.result ? req.result.value : null);
+          req.onerror = () => resolve(null);
+        });
+      }
+
+      async setCache(key, value, ttlMs) {
+        return new Promise((resolve) => {
+          const tx = this.db.transaction('cache', 'readwrite');
+          const store = tx.objectStore('cache');
+          store.put({ key, value, timestamp: Date.now(), ttl: ttlMs });
+          tx.oncomplete = () => resolve();
+        });
+      }
+
+      async saveAudit(auditRecord) {
+        return new Promise((resolve) => {
+          const tx = this.db.transaction('audits', 'readwrite');
+          const store = tx.objectStore('audits');
+          store.put(auditRecord);
+          tx.oncomplete = () => resolve();
+        });
+      }
+
+      async getAllAudits() {
+        return new Promise((resolve) => {
+          const tx = this.db.transaction('audits', 'readonly');
+          const store = tx.objectStore('audits');
+          const req = store.getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => resolve([]);
+        });
+      }
+    }
+
+    // =========================================================================
+    // MODULE 2: CACHE MANAGER
+    // =========================================================================
+    class CacheManager {
+      constructor(storageEngine) {
+        this.storage = storageEngine;
+        this.defaultTTL = 12 * 60 * 60 * 1000; // 12 Hours
+      }
+
+      async getOrFetch(key, fetchFn, customTTL = this.defaultTTL) {
+        const cached = await this.storage.getCache(key);
+        if (cached && (Date.now() - cached.timestamp < cached.ttl)) {
+          return cached.value;
+        }
+        const freshData = await fetchFn();
+        if (freshData) {
+          await this.storage.setCache(key, freshData, customTTL);
+        }
+        return freshData;
+      }
+    }
+
+    // =========================================================================
+    // MODULE 3: API ENGINE
+    // =========================================================================
+    class APIEngine {
+      constructor() {
+        this.apiKey = localStorage.getItem('api_football_key') || '';
+      }
+
+      setApiKey(key) {
+        this.apiKey = key;
+        localStorage.setItem('api_football_key', key);
+      }
+
+      async fetchFromAPI(endpoint) {
+        if (!this.apiKey) throw new Error("API key is missing.");
+        const res = await fetch(`https://v3.football.api-sports.io/${endpoint}`, {
+          method: 'GET',
+          headers: { 'x-apisports-key': this.apiKey }
+        });
+        
+        const limit = res.headers.get('x-ratelimit-requests-limit');
+        const remaining = res.headers.get('x-ratelimit-requests-remaining');
+        if (limit && remaining) {
+          document.getElementById('metricQuota').innerText = `${remaining} / ${limit}`;
+        }
+
+        const data = await res.json();
+        return data.response || [];
+      }
+    }
+
+    // =========================================================================
+    // MODULE 4: DATA & FEATURE ENGINE
+    // =========================================================================
+    class DataEngine {
+      constructor(apiEngine, cacheManager) {
+        this.api = apiEngine;
+        this.cache = cacheManager;
+      }
+
+      async buildHistoricalProfile(teamId) {
+        return this.cache.getOrFetch(`team_profile_${teamId}`, async () => {
+          const fixtures = await this.api.fetchFromAPI(`fixtures?team=${teamId}&last=5`);
+          return this.processFixtures(fixtures, teamId);
+        });
+      }
+
+      async buildH2HProfile(homeId, awayId) {
+        return this.cache.getOrFetch(`h2h_profile_${homeId}_${awayId}`, async () => {
+          const fixtures = await this.api.fetchFromAPI(`fixtures/headtohead?h2h=${homeId}-${awayId}`);
+          return this.processFixtures(fixtures.slice(0, 5), null);
+        });
+      }
+
+      processFixtures(fixtures, targetTeamId) {
+        if (!fixtures || fixtures.length === 0) return this.emptyMetrics();
+
+        let scored = 0, conceded = 0, o25 = 0, u15 = 0, btts = 0, fh = 0, sh = 0;
+        let cleanSheets = 0, failedToScore = 0;
+
+        fixtures.forEach(f => {
+          const hG = f.goals.home ?? 0;
+          const aG = f.goals.away ?? 0;
+          const hFH = f.score?.halftime?.home ?? 0;
+          const aFH = f.score?.halftime?.away ?? 0;
+
+          const totalG = hG + aG;
+          const totalFH = hFH + aFH;
+          const totalSH = totalG - totalFH;
+
+          const isHome = targetTeamId ? f.teams.home.id === targetTeamId : true;
+          const teamG = isHome ? hG : aG;
+          const oppG = isHome ? aG : hG;
+
+          scored += teamG;
+          conceded += oppG;
+
+          if (totalG >= 3) o25++;
+          if (totalG <= 1) u15++;
+          if (hG > 0 && aG > 0) btts++;
+          if (totalFH >= 1) fh++;
+          if (totalSH >= 1) sh++;
+          if (oppG === 0) cleanSheets++;
+          if (teamG === 0) failedToScore++;
+        });
+
+        const len     }
+      }
+
+      renderFixtures() {
+        const container = document.getElementById('fixturesList');
+        if (this.fixtures.length === 0) {
+          container.innerHTML = `<div class="text-center py-12 text-gray-500 text-sm">No fixtures available.</div>`;
+          return;
+        }
+
+        container.innerHTML = this.fixtures.map(f => {
+          const pred = this.predictions[f.fixture.id];
+          return `
+            <div class="bg-[#121620] border border-gray-800 rounded-lg p-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-mono">${f.fixture.status.short}</span>
+                  <span class="text-[10px] text-gray-500">${f.league.country} - ${f.league.name}</span>
+                </div>
+                <h3 class="text-sm font-bold text-white">${f.teams.home.name} <span class="text-gray-500 font-normal">v</span> ${f.teams.away.name}</h3>
+              </div>
+
+              ${pred ? `
+                <div class="flex items-center gap-2 flex-wrap">
+                  <div class="text-center bg-gray-950 p-2 rounded border border-gray-800 min-w-[70px]">
+                    <span class="text-[9px] text-gray-400 block uppercase font-semibold">Over 2.5</span>
+                    <span class="text-xs font-bold text-purple-400 font-mono">${pred.o25.prob}%</span>
+                    <span class="block text-[8px] font-bold px-1 rounded mt-0.5 ${pred.o25.conf.colorClass}">${pred.o25.conf.label}</span>
+                  </div>
+                  <div class="text-center bg-gray-950 p-2 rounded border border-gray-800 min-w-[70px]">
+                    <span class="text-[9px] text-gray-400 block uppercase font-semibold">BTTS</span>
+                    <span class="text-xs font-bold text-emerald-400 font-mono">${pred.btts.prob}%</span>
+                    <span class="block text-[8px] font-bold px-1 rounded mt-0.5 ${pred.btts.conf.colorClass}">${pred.btts.conf.label}</span>
+                  </div>
+                </div>
+              ` : `
+                <button onclick="window.app.scanFixture(${f.fixture.id})" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded transition font-medium">Scan Match</button>
+              `}
+            </div>
+          `;
+        }).join('');
+      }
+
+      renderHighConfidence() {
+        const container = document.getElementById('highConfList');
+        const highConfFixtures = [];
+
+        for (let f of this.fixtures) {
+          const pred = this.predictions[f.fixture.id];
+          if (pred && (pred.o25.conf.label === 'Very High' || pred.o25.conf.label === 'High' || pred.btts.conf.label === 'Very High')) {
+            highConfFixtures.push({ fixture: f, pred: pred });
+          }
+        }
+
+        if (highConfFixtures.length === 0) {
+          container.innerHTML = `<div class="text-center py-12 text-gray-500 text-sm">No high confidence signals generated yet.</div>`;
+          return;
+        }
+
+        container.innerHTML = highConfFixtures.map(item => `
+          <div class="bg-[#121620] border border-purple-500/40 rounded-lg p-3.5 flex items-center justify-between">
+            <div>
+              <span class="text-[10px] text-purple-400 font-bold uppercase tracking-wider block">High Confidence Signal</span>
+              <h3 class="text-sm font-bold text-white">${item.fixture.teams.home.name} vs ${item.fixture.teams.away.name}</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono font-bold text-green-400">O2.5 Prob: ${item.pred.o25.prob}%</span>
+              <span class="text-[10px] px-2 py-0.5 rounded font-bold ${item.pred.o25.conf.colorClass}">${item.pred.o25.conf.label}</span>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      renderWeights() {
+        document.getElementById('modelWeightsDisplay').innerText = JSON.stringify(this.ml.getWeights(), null, 2);
+      }
+    }
+
+    // Initialize Application Logic on Window
+    window.addEventListener('DOMContentLoaded', async () => {
+      window.app = new AppController();
+      await window.app.init();
+    });
+
+    // View Navigation Control
+    window.switchView = function(viewName) {
+      ['fixtures', 'highconf', 'accuracy', 'performance'].forEach(v => {
+        document.getElementById(`view-${v}`).classList.add('hidden');
+        document.getElementById(`tab-${v}`).classList.remove('bg-purple-600', 'text-white');
+        document.getElementById(`tab-${v}`).classList.add('bg-gray-800', 'text-gray-400');
+      });
+
+      document.getElementById(`view-${viewName}`).classList.remove('hidden');
+      document.getElementById(`tab-${viewName}`).classList.add('bg-purple-600', 'text-white');
+      document.getElementById(`tab-${viewName}`).classList.remove('bg-gray-800', 'text-gray-400');
+    };
+  </script>
+</body>
+</html>
